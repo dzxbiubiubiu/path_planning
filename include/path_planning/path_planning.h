@@ -46,6 +46,7 @@ private:
 
   ros::Publisher _vis_pub;
   ros::Publisher _traj_pub;
+  ros::Publisher _smooth_traj_pub;
 
   // goal state
   double _prev_goal[3];

@@ -26,15 +26,19 @@ Planner::Planner()
   _set_start = false;
 
   _octree_sub = _nh.subscribe<octomap_msgs::Octomap>("/octomap_binary", 1, &Planner::octomapCallback, this);
-  _odom_sub = _nh.subscribe<nav_msgs::Odometry>("/ground_truth/state", 1, &Planner::odometryCallback, this);
+  _odom_sub = _nh.subscribe<nav_msgs::Odometry>("/odom", 1, &Planner::odometryCallback, this);
+  // IDEA change this to PoseArray and provide many points in the row ???
   _goal_sub = _nh.subscribe<geometry_msgs::PointStamped>("/clicked_point", 1, &Planner::goalCallback, this);
 
   _vis_pub = _nh.advertise<visualization_msgs::Marker>("/visualization_marker", 1);
   _traj_pub = _nh.advertise<trajectory_msgs::MultiDOFJointTrajectory>("/waypoints", 1);
+  _smooth_traj_pub = _nh.advertise<trajectory_msgs::MultiDOFJointTrajectory>("/waypoints_smooth", 3);
+
   ROS_INFO("OMPL version %s\n", OMPL_VERSION);
 
-  _quadrotor = std::shared_ptr<fcl::CollisionGeometry>(new fcl::Box(0.8, 0.8, 0.1));
-  fcl::OcTree* tree = new fcl::OcTree(std::shared_ptr<const octomap::OcTree>(new octomap::OcTree(0.1)));
+  // Add some more width to the drone box, to keep a safe distance from obstacles
+  _quadrotor = std::shared_ptr<fcl::CollisionGeometry>(new fcl::Box(1.5, 1.5, 0.2));
+  fcl::OcTree* tree = new fcl::OcTree(std::shared_ptr<const octomap::OcTree>(new octomap::OcTree(0.05)));
   _tree = std::shared_ptr<fcl::CollisionGeometry>(tree);
 
   _space = ompl::base::StateSpacePtr(new ompl::base::SE3StateSpace());
@@ -249,6 +253,7 @@ void Planner::plan()
 
   // print the problem settings
   _pdef->print(std::cout);
+
   // Get the distance to the desired goal for the top solution
   _pdef->getSolutionDifference();
 
@@ -303,19 +308,61 @@ void Planner::plan()
     _traj_pub.publish(msg);
 
     // Path smoothing using bspline
-
     ompl::geometric::PathSimplifier* pathBSpline = new ompl::geometric::PathSimplifier(_si);
     _path_smooth = new ompl::geometric::PathGeometric(
         dynamic_cast<const ompl::geometric::PathGeometric&>(*_pdef->getSolutionPath()));
-    pathBSpline->smoothBSpline(*_path_smooth, 3);
+
+    // TODO Find a way to calculate the smoothness I want
+    ROS_WARN("Path smoothness : %f\n", _path_smooth->smoothness());
+    // Using 5, as is the default value of the function
+    // If the path is not smooth, the value of smoothness() will be closer to 1
+    int bspline_steps = ceil(5 * _path_smooth->smoothness());
+
+    pathBSpline->smoothBSpline(*_path_smooth, bspline_steps);
     ROS_INFO("Smoothed Path\n");
     _path_smooth->print(std::cout);
 
-    // Publish path as markers
+    trajectory_msgs::MultiDOFJointTrajectory msg_smooth;
+    trajectory_msgs::MultiDOFJointTrajectoryPoint point_msg_smooth;
 
+    msg_smooth.header.stamp = ros::Time::now();
+    msg_smooth.header.frame_id = "world";
+    msg_smooth.joint_names.clear();
+    msg_smooth.points.clear();
+    msg_smooth.joint_names.push_back("quadrotor");
+
+    for (std::size_t path_idx = 0; path_idx < _path_smooth->getStateCount(); path_idx++)
+    {
+      const ompl::base::SE3StateSpace::StateType* se3state =
+          _path_smooth->getState(path_idx)->as<ompl::base::SE3StateSpace::StateType>();
+
+      // extract the first component of the state and cast it to what we expect
+      const ompl::base::RealVectorStateSpace::StateType* pos =
+          se3state->as<ompl::base::RealVectorStateSpace::StateType>(0);
+
+      // extract the second component of the state and cast it to what we expect
+      const ompl::base::SO3StateSpace::StateType* rot = se3state->as<ompl::base::SO3StateSpace::StateType>(1);
+
+      point_msg_smooth.time_from_start.fromSec(ros::Time::now().toSec());
+      point_msg_smooth.transforms.resize(1);
+
+      point_msg_smooth.transforms[0].translation.x = pos->values[0];
+      point_msg_smooth.transforms[0].translation.y = pos->values[1];
+      point_msg_smooth.transforms[0].translation.z = pos->values[2];
+
+      point_msg_smooth.transforms[0].rotation.x = rot->x;
+      point_msg_smooth.transforms[0].rotation.y = rot->y;
+      point_msg_smooth.transforms[0].rotation.z = rot->z;
+      point_msg_smooth.transforms[0].rotation.w = rot->w;
+
+      msg_smooth.points.push_back(point_msg_smooth);
+    }
+    _smooth_traj_pub.publish(msg_smooth);
+
+    // Publish path as markers
     visualization_msgs::Marker marker;
-    marker.action = visualization_msgs::Marker::DELETEALL;
-    _vis_pub.publish(marker);
+    // marker.action = visualization_msgs::Marker::DELETEALL;
+    //_vis_pub.publish(marker);
 
     for (std::size_t idx = 0; idx < _path_smooth->getStateCount(); idx++)
     {
@@ -346,13 +393,13 @@ void Planner::plan()
       marker.scale.x = 0.15;
       marker.scale.y = 0.15;
       marker.scale.z = 0.15;
-      marker.color.a = 0.5;
-      marker.color.r = 0.0;
-      marker.color.g = 1.0;
-      marker.color.b = 0.0;
+      marker.color.a = 1.0;
+      marker.color.r = idx * 0.20;
+      marker.color.g = idx * 0.20;
+      marker.color.b = idx * 0.20;
       _vis_pub.publish(marker);
-      // ros::Duration(0.1).sleep();
-      // ROS_INFO("Published marker %zu\n", idx);
+      ros::Duration(0.1).sleep();
+      ROS_INFO("Published marker %zu\n", idx);
     }
 
     // Clear memory
