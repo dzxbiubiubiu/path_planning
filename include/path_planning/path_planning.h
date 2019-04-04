@@ -18,7 +18,7 @@
 #include <ompl/base/spaces/SE3StateSpace.h>
 #include <ompl/base/OptimizationObjective.h>
 #include <ompl/base/objectives/PathLengthOptimizationObjective.h>
-#include <ompl/geometric/planners/rrt/RRTstar.h>
+// #include <ompl/geometric/planners/rrt/RRTstar.h>
 #include <ompl/geometric/planners/rrt/InformedRRTstar.h>
 #include <ompl/geometric/SimpleSetup.h>
 
@@ -41,7 +41,7 @@ private:
   ros::NodeHandle _nh;
 
   ros::Subscriber _octree_sub;
-  ros::Subscriber _pose_sub;
+  ros::Subscriber _odom_sub;
   ros::Subscriber _goal_sub;
 
   ros::Publisher _vis_pub;
@@ -74,7 +74,7 @@ private:
 
   // Callbacks
   void octomapCallback(const octomap_msgs::Octomap::ConstPtr& msg);
-  void poseCallback(const geometry_msgs::PoseStampedConstPtr& msg);
+  void odometryCallback(const nav_msgs::Odometry::ConstPtr& msg);
   void goalCallback(const geometry_msgs::PointStamped::ConstPtr& msg);
 
 public:

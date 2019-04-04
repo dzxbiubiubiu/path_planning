@@ -26,7 +26,8 @@ Planner::Planner()
   _set_start = false;
 
   _octree_sub = _nh.subscribe<octomap_msgs::Octomap>("/octomap_binary", 1, &Planner::octomapCallback, this);
-  _pose_sub = _nh.subscribe<geometry_msgs::PoseStamped>("/amcl_pose", 1, &Planner::poseCallback, this);
+  _odom_sub = _nh.subscribe<nav_msgs::Odometry>("/odom", 1, &Planner::odometryCallback, this);
+  // IDEA change this to PoseArray and provide many points in the row ???
   _goal_sub = _nh.subscribe<geometry_msgs::PointStamped>("/clicked_point", 1, &Planner::goalCallback, this);
 
   _vis_pub = _nh.advertise<visualization_msgs::Marker>("/visualization_marker", 1);
@@ -72,19 +73,14 @@ void Planner::octomapCallback(const octomap_msgs::Octomap::ConstPtr& msg)
   replan();
 }
 
-void Planner::poseCallback(const geometry_msgs::PoseStampedConstPtr& msg)
+void Planner::odometryCallback(const nav_msgs::Odometry::ConstPtr& msg)
 {
-  setStart(msg->pose.position.x, msg->pose.position.y, msg->pose.position.z);
+  setStart(msg->pose.pose.position.x, msg->pose.pose.position.y, msg->pose.pose.position.z);
   initStart();
 }
 
 void Planner::goalCallback(const geometry_msgs::PointStamped::ConstPtr& msg)
 {
-  if (msg->header.frame_id != "map")
-  {
-    ROS_ERROR("Goal point not in the map frame. Skipping goal...\n");
-    return;
-  }
   setGoal(msg->point.x, msg->point.y, msg->point.z);
 }
 
@@ -244,7 +240,7 @@ void Planner::replan()
 void Planner::plan()
 {
   // create a Planner for the defined _space
-  ompl::base::PlannerPtr plan(new ompl::geometric::RRTstar(_si));
+  ompl::base::PlannerPtr plan(new ompl::geometric::InformedRRTstar(_si));
 
   // set the problem we are trying to solve for the Planner
   plan->setProblemDefinition(_pdef);
@@ -316,6 +312,7 @@ void Planner::plan()
     _path_smooth = new ompl::geometric::PathGeometric(
         dynamic_cast<const ompl::geometric::PathGeometric&>(*_pdef->getSolutionPath()));
 
+    // TODO Find a way to calculate the smoothness I want
     ROS_WARN("Path smoothness : %f\n", _path_smooth->smoothness());
     // Using 5, as is the default value of the function
     // If the path is not smooth, the value of smoothness() will be closer to 1
@@ -380,7 +377,7 @@ void Planner::plan()
       // extract the second component of the state and cast it to what we expect
       const ompl::base::SO3StateSpace::StateType* rot = se3state->as<ompl::base::SO3StateSpace::StateType>(1);
 
-      marker.header.frame_id = "map";
+      marker.header.frame_id = "world";
       marker.header.stamp = ros::Time();
       marker.ns = "path";
       marker.id = idx;
@@ -397,9 +394,9 @@ void Planner::plan()
       marker.scale.y = 0.15;
       marker.scale.z = 0.15;
       marker.color.a = 1.0;
-      marker.color.r = 0;
+      marker.color.r = idx * 0.20;
       marker.color.g = idx * 0.20;
-      marker.color.b = 0;
+      marker.color.b = idx * 0.20;
       _vis_pub.publish(marker);
       ros::Duration(0.1).sleep();
       ROS_INFO("Published marker %zu\n", idx);
