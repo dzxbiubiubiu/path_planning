@@ -13,6 +13,7 @@
 #include <trajectory_msgs/MultiDOFJointTrajectory.h>
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/Pose.h>
+#include <geometry_msgs/TransformStamped.h>
 
 #include <ompl/base/spaces/SE3StateSpace.h>
 #include <ompl/base/spaces/SE3StateSpace.h>
@@ -49,7 +50,7 @@ private:
   ros::Publisher _smooth_traj_pub;
 
   // goal state
-  double _prev_goal[3];
+  double _prev_goal[7];
 
   bool _replan_flag;
   // Flag for initialization
@@ -75,7 +76,7 @@ private:
   // Callbacks
   void octomapCallback(const octomap_msgs::Octomap::ConstPtr& msg);
   void odometryCallback(const nav_msgs::Odometry::ConstPtr& msg);
-  void goalCallback(const geometry_msgs::PointStamped::ConstPtr& msg);
+  void goalCallback(const geometry_msgs::TransformStamped::ConstPtr& msg);
 
 public:
   Planner();
@@ -83,9 +84,9 @@ public:
 
   void initializations(double min_bounds[3], double max_bounds[3]);
   void initStart();
-  void setStart(double x, double y, double z);
+  void setStart(double x, double y, double z, double ax, double ay, double az, double a);
 
-  void setGoal(double x, double y, double z);
+  void setGoal(double x, double y, double z, double ax, double ay, double az, double a);
 
   void updateMap(std::shared_ptr<fcl::CollisionGeometry> map);
 

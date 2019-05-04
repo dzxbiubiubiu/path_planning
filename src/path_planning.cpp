@@ -27,8 +27,7 @@ Planner::Planner()
 
   _octree_sub = _nh.subscribe<octomap_msgs::Octomap>("/octomap_binary", 1, &Planner::octomapCallback, this);
   _odom_sub = _nh.subscribe<nav_msgs::Odometry>("/odom", 1, &Planner::odometryCallback, this);
-  // IDEA change this to PoseArray and provide many points in the row ???
-  _goal_sub = _nh.subscribe<geometry_msgs::PointStamped>("/clicked_point", 1, &Planner::goalCallback, this);
+  _goal_sub = _nh.subscribe<geometry_msgs::TransformStamped>("/next_goal", 1, &Planner::goalCallback, this);
 
   _vis_pub = _nh.advertise<visualization_msgs::Marker>("/visualization_marker", 1);
   _traj_pub = _nh.advertise<trajectory_msgs::MultiDOFJointTrajectory>("/waypoints", 1);
@@ -75,13 +74,16 @@ void Planner::octomapCallback(const octomap_msgs::Octomap::ConstPtr& msg)
 
 void Planner::odometryCallback(const nav_msgs::Odometry::ConstPtr& msg)
 {
-  setStart(msg->pose.pose.position.x, msg->pose.pose.position.y, msg->pose.pose.position.z);
+  setStart(msg->pose.pose.position.x, msg->pose.pose.position.y, msg->pose.pose.position.z,
+           msg->pose.pose.orientation.x, msg->pose.pose.orientation.y, msg->pose.pose.orientation.z,
+           msg->pose.pose.orientation.w);
   initStart();
 }
 
-void Planner::goalCallback(const geometry_msgs::PointStamped::ConstPtr& msg)
+void Planner::goalCallback(const geometry_msgs::TransformStamped::ConstPtr& msg)
 {
-  setGoal(msg->point.x, msg->point.y, msg->point.z);
+  setGoal(msg->transform.translation.x, msg->transform.translation.y, msg->transform.translation.z,
+          msg->transform.rotation.x, msg->transform.rotation.y, msg->transform.rotation.z, msg->transform.rotation.w);
 }
 
 void Planner::initializations(double min_bounds[3], double max_bounds[3])
@@ -107,15 +109,15 @@ void Planner::initializations(double min_bounds[3], double max_bounds[3])
   // construct an instance of _space information from this state _space
   _si = ompl::base::SpaceInformationPtr(new ompl::base::SpaceInformation(_space));
 
-  start->setXYZ(0, 0, 0);
-  start->as<ompl::base::SO3StateSpace::StateType>(1)->setIdentity();
-  // start.random();
-
   goal->setXYZ(0, 0, 0);
   _prev_goal[0] = 0;
   _prev_goal[1] = 0;
   _prev_goal[2] = 0;
-  goal->as<ompl::base::SO3StateSpace::StateType>(1)->setIdentity();
+  _prev_goal[3] = 0;
+  _prev_goal[4] = 0;
+  _prev_goal[5] = 0;
+  _prev_goal[6] = 1;
+  goal->as<ompl::base::SO3StateSpace::StateType>(1)->setAxisAngle(0, 0, 0, 1);
   // goal.random();
 
   // set state validity checking for this _space
@@ -181,16 +183,16 @@ void Planner::initStart()
   _set_start = true;
 }
 
-void Planner::setStart(double x, double y, double z)
+void Planner::setStart(double x, double y, double z, double ax, double ay, double az, double a)
 {
   ompl::base::ScopedState<ompl::base::SE3StateSpace> start(_space);
   start->setXYZ(x, y, z);
-  start->as<ompl::base::SO3StateSpace::StateType>(1)->setIdentity();
+  start->as<ompl::base::SO3StateSpace::StateType>(1)->setAxisAngle(ax, ay, az, a);
   _pdef->clearStartStates();
   _pdef->addStartState(start);
 }
 
-void Planner::setGoal(double x, double y, double z)
+void Planner::setGoal(double x, double y, double z, double ax, double ay, double az, double a)
 {
   if (_prev_goal[0] != x || _prev_goal[1] != y || _prev_goal[2] != z)
   {
@@ -199,10 +201,15 @@ void Planner::setGoal(double x, double y, double z)
     _prev_goal[0] = x;
     _prev_goal[1] = y;
     _prev_goal[2] = z;
-    goal->as<ompl::base::SO3StateSpace::StateType>(1)->setIdentity();
+    _prev_goal[3] = ax;
+    _prev_goal[4] = ay;
+    _prev_goal[5] = az;
+    _prev_goal[6] = a;
+
+    goal->as<ompl::base::SO3StateSpace::StateType>(1)->setAxisAngle(ax, ay, az, a);
     _pdef->clearGoal();
     _pdef->setGoalState(goal);
-    ROS_INFO("Goal point set to : %f %f %f \n", x, y, z);
+    ROS_INFO("Goal point set to : %f %f %f, %f %f %f %f \n", x, y, z, ax, ay, az, a);
     if (_set_start)
       plan();
   }
@@ -381,7 +388,7 @@ void Planner::plan()
       marker.header.stamp = ros::Time();
       marker.ns = "path";
       marker.id = idx;
-      marker.type = visualization_msgs::Marker::CUBE;
+      marker.type = visualization_msgs::Marker::ARROW;
       marker.action = visualization_msgs::Marker::ADD;
       marker.pose.position.x = pos->values[0];
       marker.pose.position.y = pos->values[1];
@@ -390,9 +397,9 @@ void Planner::plan()
       marker.pose.orientation.y = rot->y;
       marker.pose.orientation.z = rot->z;
       marker.pose.orientation.w = rot->w;
-      marker.scale.x = 0.15;
-      marker.scale.y = 0.15;
-      marker.scale.z = 0.15;
+      marker.scale.x = 0.2;
+      marker.scale.y = 0.05;
+      marker.scale.z = 0.05;
       marker.color.a = 1.0;
       marker.color.r = idx * 0.20;
       marker.color.g = idx * 0.20;
@@ -414,7 +421,7 @@ void Planner::plan()
 
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "octomap_planner");
+  ros::init(argc, argv, "path_planning_node");
 
   path_planning::Planner planner;
 
