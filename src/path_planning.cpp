@@ -26,7 +26,7 @@ Planner::Planner()
   _set_start = false;
 
   _octree_sub = _nh.subscribe<octomap_msgs::Octomap>("/octomap_binary", 1, &Planner::octomapCallback, this);
-  _odom_sub = _nh.subscribe<nav_msgs::Odometry>("/odom", 1, &Planner::odometryCallback, this);
+  _pose_sub = _nh.subscribe<geometry_msgs::PoseStamped>("/amcl_pose", 1, &Planner::poseCallback, this);
   _goal_sub = _nh.subscribe<geometry_msgs::TransformStamped>("/next_goal", 1, &Planner::goalCallback, this);
 
   _vis_pub = _nh.advertise<visualization_msgs::Marker>("/visualization_marker", 1);
@@ -72,11 +72,10 @@ void Planner::octomapCallback(const octomap_msgs::Octomap::ConstPtr& msg)
   replan();
 }
 
-void Planner::odometryCallback(const nav_msgs::Odometry::ConstPtr& msg)
+void Planner::poseCallback(const geometry_msgs::PoseStamped::ConstPtr& msg)
 {
-  setStart(msg->pose.pose.position.x, msg->pose.pose.position.y, msg->pose.pose.position.z,
-           msg->pose.pose.orientation.x, msg->pose.pose.orientation.y, msg->pose.pose.orientation.z,
-           msg->pose.pose.orientation.w);
+  setStart(msg->pose.position.x, msg->pose.position.y, msg->pose.position.z, msg->pose.orientation.x,
+           msg->pose.orientation.y, msg->pose.orientation.z, msg->pose.orientation.w);
   initStart();
 }
 

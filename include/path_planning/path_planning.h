@@ -42,7 +42,7 @@ private:
   ros::NodeHandle _nh;
 
   ros::Subscriber _octree_sub;
-  ros::Subscriber _odom_sub;
+  ros::Subscriber _pose_sub;
   ros::Subscriber _goal_sub;
 
   ros::Publisher _vis_pub;
@@ -75,7 +75,7 @@ private:
 
   // Callbacks
   void octomapCallback(const octomap_msgs::Octomap::ConstPtr& msg);
-  void odometryCallback(const nav_msgs::Odometry::ConstPtr& msg);
+  void poseCallback(const geometry_msgs::PoseStamped::ConstPtr& msg);
   void goalCallback(const geometry_msgs::TransformStamped::ConstPtr& msg);
 
 public:
