@@ -19,7 +19,6 @@
 #include <ompl/base/spaces/SE3StateSpace.h>
 #include <ompl/base/OptimizationObjective.h>
 #include <ompl/base/objectives/PathLengthOptimizationObjective.h>
-// #include <ompl/geometric/planners/rrt/RRTstar.h>
 #include <ompl/geometric/planners/rrt/InformedRRTstar.h>
 #include <ompl/geometric/SimpleSetup.h>
 
@@ -32,6 +31,10 @@
 #include "fcl/collision.h"
 #include "fcl/broadphase/broadphase.h"
 #include "fcl/math/transform.h"
+
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2/LinearMath/Vector3.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 namespace path_planning
 {
@@ -84,7 +87,7 @@ public:
 
   void initializations(double min_bounds[3], double max_bounds[3]);
   void initStart();
-  void setStart(double x, double y, double z, double ax, double ay, double az, double a);
+  void setStart(double x, double y, double z);
 
   void setGoal(double x, double y, double z, double ax, double ay, double az, double a);
 

@@ -36,7 +36,7 @@ Planner::Planner()
   ROS_INFO("OMPL version %s\n", OMPL_VERSION);
 
   // Add some more width to the drone box, to keep a safe distance from obstacles
-  _quadrotor = std::shared_ptr<fcl::CollisionGeometry>(new fcl::Box(1.5, 1.5, 0.2));
+  _quadrotor = std::shared_ptr<fcl::CollisionGeometry>(new fcl::Box(1, 1, 0.2));
   fcl::OcTree* tree = new fcl::OcTree(std::shared_ptr<const octomap::OcTree>(new octomap::OcTree(0.05)));
   _tree = std::shared_ptr<fcl::CollisionGeometry>(tree);
 
@@ -74,15 +74,19 @@ void Planner::octomapCallback(const octomap_msgs::Octomap::ConstPtr& msg)
 
 void Planner::poseCallback(const geometry_msgs::PoseStamped::ConstPtr& msg)
 {
-  setStart(msg->pose.position.x, msg->pose.position.y, msg->pose.position.z, msg->pose.orientation.x,
-           msg->pose.orientation.y, msg->pose.orientation.z, msg->pose.orientation.w);
+  setStart(msg->pose.position.x, msg->pose.position.y, msg->pose.position.z);
   initStart();
 }
 
 void Planner::goalCallback(const geometry_msgs::TransformStamped::ConstPtr& msg)
 {
-  setGoal(msg->transform.translation.x, msg->transform.translation.y, msg->transform.translation.z,
-          msg->transform.rotation.x, msg->transform.rotation.y, msg->transform.rotation.z, msg->transform.rotation.w);
+  // Convert the transform msg to the right format
+  tf2::Quaternion quat;
+  tf2::fromMsg(msg->transform.rotation, quat);
+  tf2::Vector3 axis = quat.getAxis();
+
+  setGoal(msg->transform.translation.x, msg->transform.translation.y, msg->transform.translation.z, axis.x(), axis.y(),
+          axis.z(), quat.getAngle());
 }
 
 void Planner::initializations(double min_bounds[3], double max_bounds[3])
@@ -108,15 +112,17 @@ void Planner::initializations(double min_bounds[3], double max_bounds[3])
   // construct an instance of _space information from this state _space
   _si = ompl::base::SpaceInformationPtr(new ompl::base::SpaceInformation(_space));
 
-  goal->setXYZ(0, 0, 0);
+  goal->setXYZ(0, 0, 0.18);
   _prev_goal[0] = 0;
   _prev_goal[1] = 0;
-  _prev_goal[2] = 0;
-  _prev_goal[3] = 0;
+  _prev_goal[2] = 0.18;
+  _prev_goal[3] = 1;
   _prev_goal[4] = 0;
   _prev_goal[5] = 0;
-  _prev_goal[6] = 1;
-  goal->as<ompl::base::SO3StateSpace::StateType>(1)->setAxisAngle(0, 0, 0, 1);
+  _prev_goal[6] = 0;
+  // Set the quaternion from axis-angle representation. The angle is given in radians.
+  // double ax, double ay, double az, double angle
+  goal->as<ompl::base::SO3StateSpace::StateType>(1)->setIdentity();
   // goal.random();
 
   // set state validity checking for this _space
@@ -182,11 +188,13 @@ void Planner::initStart()
   _set_start = true;
 }
 
-void Planner::setStart(double x, double y, double z, double ax, double ay, double az, double a)
+void Planner::setStart(double x, double y, double z)
 {
   ompl::base::ScopedState<ompl::base::SE3StateSpace> start(_space);
   start->setXYZ(x, y, z);
-  start->as<ompl::base::SO3StateSpace::StateType>(1)->setAxisAngle(ax, ay, az, a);
+  // Do not change the initial orientation, keep the previous goal's
+  start->as<ompl::base::SO3StateSpace::StateType>(1)->setAxisAngle(_prev_goal[3], _prev_goal[4], _prev_goal[5],
+                                                                   _prev_goal[6]);
   _pdef->clearStartStates();
   _pdef->addStartState(start);
 }
