@@ -74,7 +74,7 @@ void Planner::octomapCallback(const octomap_msgs::Octomap::ConstPtr& msg)
 
 void Planner::poseCallback(const geometry_msgs::PoseStamped::ConstPtr& msg)
 {
-  setStart(msg->pose.position.x, msg->pose.position.y, msg->pose.position.z);
+  setStart(_prev_goal[0], _prev_goal[1], _prev_goal[2]);
   initStart();
 }
 
@@ -288,12 +288,12 @@ void Planner::plan()
     trajectory_msgs::MultiDOFJointTrajectoryPoint point_msg;
 
     msg.header.stamp = ros::Time::now();
-    msg.header.frame_id = "world";
+    msg.header.frame_id = "map";
     msg.joint_names.clear();
     msg.points.clear();
     msg.joint_names.push_back("quadrotor");
 
-    for (std::size_t path_idx = 0; path_idx < pth->getStateCount(); path_idx++)
+    for (std::size_t path_idx = 1; path_idx < pth->getStateCount(); path_idx++)
     {
       const ompl::base::SE3StateSpace::StateType* se3state =
           pth->getState(path_idx)->as<ompl::base::SE3StateSpace::StateType>();
@@ -326,7 +326,6 @@ void Planner::plan()
     _path_smooth = new ompl::geometric::PathGeometric(
         dynamic_cast<const ompl::geometric::PathGeometric&>(*_pdef->getSolutionPath()));
 
-    // TODO Find a way to calculate the smoothness I want
     ROS_WARN("Path smoothness : %f\n", _path_smooth->smoothness());
     // Using 5, as is the default value of the function
     // If the path is not smooth, the value of smoothness() will be closer to 1
@@ -340,12 +339,12 @@ void Planner::plan()
     trajectory_msgs::MultiDOFJointTrajectoryPoint point_msg_smooth;
 
     msg_smooth.header.stamp = ros::Time::now();
-    msg_smooth.header.frame_id = "world";
+    msg_smooth.header.frame_id = "map";
     msg_smooth.joint_names.clear();
     msg_smooth.points.clear();
     msg_smooth.joint_names.push_back("quadrotor");
 
-    for (std::size_t path_idx = 0; path_idx < _path_smooth->getStateCount(); path_idx++)
+    for (std::size_t path_idx = 1; path_idx < _path_smooth->getStateCount(); path_idx++)
     {
       const ompl::base::SE3StateSpace::StateType* se3state =
           _path_smooth->getState(path_idx)->as<ompl::base::SE3StateSpace::StateType>();
@@ -378,7 +377,7 @@ void Planner::plan()
     // marker.action = visualization_msgs::Marker::DELETEALL;
     //_vis_pub.publish(marker);
 
-    for (std::size_t idx = 0; idx < _path_smooth->getStateCount(); idx++)
+    for (std::size_t idx = 1; idx < _path_smooth->getStateCount(); idx++)
     {
       // cast the abstract state type to the type we expect
       const ompl::base::SE3StateSpace::StateType* se3state =
@@ -391,7 +390,7 @@ void Planner::plan()
       // extract the second component of the state and cast it to what we expect
       const ompl::base::SO3StateSpace::StateType* rot = se3state->as<ompl::base::SO3StateSpace::StateType>(1);
 
-      marker.header.frame_id = "world";
+      marker.header.frame_id = "map";
       marker.header.stamp = ros::Time();
       marker.ns = "path";
       marker.id = idx;
@@ -421,7 +420,9 @@ void Planner::plan()
     _replan_flag = false;
   }
   else
+  {
     ROS_INFO("No solution found\n");
+  }
 }
 
 }  // namespace path_planning
