@@ -30,13 +30,13 @@ Planner::Planner()
   _goal_sub = _nh.subscribe<geometry_msgs::TransformStamped>("/next_goal", 1, &Planner::goalCallback, this);
 
   _vis_pub = _nh.advertise<visualization_msgs::Marker>("/visualization_marker", 1);
-  _traj_pub = _nh.advertise<trajectory_msgs::MultiDOFJointTrajectory>("/waypoints", 1);
-  _smooth_traj_pub = _nh.advertise<trajectory_msgs::MultiDOFJointTrajectory>("/waypoints_smooth", 3);
+  _traj_pub = _nh.advertise<trajectory_msgs::MultiDOFJointTrajectory>("/waypoints", 1, true);
+  _smooth_traj_pub = _nh.advertise<trajectory_msgs::MultiDOFJointTrajectory>("/waypoints_smooth", 3, true);
 
   ROS_INFO("OMPL version %s\n", OMPL_VERSION);
 
   // Add some more width to the drone box, to keep a safe distance from obstacles
-  _quadrotor = std::shared_ptr<fcl::CollisionGeometry>(new fcl::Box(1, 1, 0.2));
+  _quadrotor = std::shared_ptr<fcl::CollisionGeometry>(new fcl::Box(0.8, 0.8, 0.2));
   fcl::OcTree* tree = new fcl::OcTree(std::shared_ptr<const octomap::OcTree>(new octomap::OcTree(0.05)));
   _tree = std::shared_ptr<fcl::CollisionGeometry>(tree);
 
