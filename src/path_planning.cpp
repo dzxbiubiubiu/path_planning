@@ -63,7 +63,7 @@ void Planner::octomapCallback(const octomap_msgs::Octomap::ConstPtr& msg)
   tree_oct->getMetricMin(_min_bounds[0], _min_bounds[1], _min_bounds[2]);
   tree_oct->getMetricMax(_max_bounds[0], _max_bounds[1], _max_bounds[2]);
 
-  initializations(_min_bounds, _max_bounds);
+  initializations();
 
   // Update the octree used for collision checking
   updateMap(std::shared_ptr<fcl::CollisionGeometry>(tree));
