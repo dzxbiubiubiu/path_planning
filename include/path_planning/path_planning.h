@@ -20,6 +20,7 @@
 #include <ompl/base/OptimizationObjective.h>
 #include <ompl/base/objectives/PathLengthOptimizationObjective.h>
 #include <ompl/geometric/planners/rrt/InformedRRTstar.h>
+#include <ompl/geometric/planners/rrt/RRTstar.h>
 #include <ompl/geometric/SimpleSetup.h>
 
 #include <ompl/config.h>
@@ -55,6 +56,10 @@ private:
   // goal state
   double _prev_goal[7];
 
+  // Space bounds
+  double _min_bounds[3];
+  double _max_bounds[3];
+
   bool _replan_flag;
   // Flag for initialization
   bool _set_start;
@@ -85,7 +90,7 @@ public:
   Planner();
   ~Planner();
 
-  void initializations(double min_bounds[3], double max_bounds[3]);
+  void initializations();
   void initStart();
   void setStart(double x, double y, double z);
 

@@ -36,7 +36,7 @@ Planner::Planner()
   ROS_INFO("OMPL version %s\n", OMPL_VERSION);
 
   // Add some more width to the drone box, to keep a safe distance from obstacles
-  _quadrotor = std::shared_ptr<fcl::CollisionGeometry>(new fcl::Box(0.8, 0.8, 0.2));
+  _quadrotor = std::shared_ptr<fcl::CollisionGeometry>(new fcl::Box(0.80, 0.80, 0.2));
   fcl::OcTree* tree = new fcl::OcTree(std::shared_ptr<const octomap::OcTree>(new octomap::OcTree(0.05)));
   _tree = std::shared_ptr<fcl::CollisionGeometry>(tree);
 
@@ -60,12 +60,10 @@ void Planner::octomapCallback(const octomap_msgs::Octomap::ConstPtr& msg)
   fcl::OcTree* tree = new fcl::OcTree(std::shared_ptr<const octomap::OcTree>(tree_oct));
   ROS_INFO("Octomap loaded\n");
 
-  double min_bounds[3];
-  double max_bounds[3];
-  tree_oct->getMetricMin(min_bounds[0], min_bounds[1], min_bounds[2]);
-  tree_oct->getMetricMax(max_bounds[0], max_bounds[1], max_bounds[2]);
+  tree_oct->getMetricMin(_min_bounds[0], _min_bounds[1], _min_bounds[2]);
+  tree_oct->getMetricMax(_max_bounds[0], _max_bounds[1], _max_bounds[2]);
 
-  initializations(min_bounds, max_bounds);
+  initializations(_min_bounds, _max_bounds);
 
   // Update the octree used for collision checking
   updateMap(std::shared_ptr<fcl::CollisionGeometry>(tree));
@@ -74,7 +72,14 @@ void Planner::octomapCallback(const octomap_msgs::Octomap::ConstPtr& msg)
 
 void Planner::poseCallback(const geometry_msgs::PoseStamped::ConstPtr& msg)
 {
-  setStart(_prev_goal[0], _prev_goal[1], _prev_goal[2]);
+  // Catch cases where the initial position is out of bounds, so just keep the previous goal
+  if (msg->pose.position.x > _min_bounds[0] && msg->pose.position.x < _max_bounds[0] &&
+      msg->pose.position.y > _min_bounds[1] && msg->pose.position.y < _max_bounds[1] &&
+      msg->pose.position.z > _min_bounds[2] && msg->pose.position.z < _max_bounds[2])
+    setStart(msg->pose.position.x, msg->pose.position.y, msg->pose.position.z);
+  else
+    setStart(_prev_goal[0], _prev_goal[1], _prev_goal[2]);
+
   initStart();
 }
 
@@ -89,7 +94,7 @@ void Planner::goalCallback(const geometry_msgs::TransformStamped::ConstPtr& msg)
           axis.z(), quat.getAngle());
 }
 
-void Planner::initializations(double min_bounds[3], double max_bounds[3])
+void Planner::initializations()
 {
   // create a start state
   ompl::base::ScopedState<ompl::base::SE3StateSpace> start(_space);
@@ -100,21 +105,21 @@ void Planner::initializations(double min_bounds[3], double max_bounds[3])
   // set the bounds for the R^3 part of SE(3)
   ompl::base::RealVectorBounds bounds(3);
 
-  bounds.setLow(0, min_bounds[0]);   // x min
-  bounds.setHigh(0, max_bounds[0]);  // x max
-  bounds.setLow(1, min_bounds[1]);   // y min
-  bounds.setHigh(1, max_bounds[1]);  // y max
-  bounds.setLow(2, min_bounds[2]);   // z min
-  bounds.setHigh(2, max_bounds[2]);  // z max
+  bounds.setLow(0, _min_bounds[0]);   // x min
+  bounds.setHigh(0, _max_bounds[0]);  // x max
+  bounds.setLow(1, _min_bounds[1]);   // y min
+  bounds.setHigh(1, _max_bounds[1]);  // y max
+  bounds.setLow(2, _min_bounds[2]);   // z min
+  bounds.setHigh(2, _max_bounds[2]);  // z max
 
   _space->as<ompl::base::SE3StateSpace>()->setBounds(bounds);
 
   // construct an instance of _space information from this state _space
   _si = ompl::base::SpaceInformationPtr(new ompl::base::SpaceInformation(_space));
 
-  goal->setXYZ(0, 0, 0.18);
-  _prev_goal[0] = 0;
-  _prev_goal[1] = 0;
+  goal->setXYZ(0.0, 0.0, 0.18);
+  _prev_goal[0] = 0.0;
+  _prev_goal[1] = 0.0;
   _prev_goal[2] = 0.18;
   _prev_goal[3] = 1;
   _prev_goal[4] = 0;
@@ -135,7 +140,7 @@ void Planner::initializations(double min_bounds[3], double max_bounds[3])
   _pdef->setStartAndGoalStates(start, goal);
 
   // set Optimizattion objective
-  _pdef->setOptimizationObjective(Planner::getPathLengthObjWithCostToGo(_si));
+  // _pdef->setOptimizationObjective(Planner::getPathLengthObjWithCostToGo(_si));
 }
 
 bool Planner::isStateValid(const ompl::base::State* state)
@@ -216,7 +221,7 @@ void Planner::setGoal(double x, double y, double z, double ax, double ay, double
     goal->as<ompl::base::SO3StateSpace::StateType>(1)->setAxisAngle(ax, ay, az, a);
     _pdef->clearGoal();
     _pdef->setGoalState(goal);
-    ROS_INFO("Goal point set to : %f %f %f, %f %f %f %f \n", x, y, z, ax, ay, az, a);
+    ROS_INFO("[Path planning] Goal point set to : %f %f %f, %f %f %f %f \n", x, y, z, ax, ay, az, a);
     if (_set_start)
       plan();
   }
@@ -254,7 +259,7 @@ void Planner::replan()
 void Planner::plan()
 {
   // create a Planner for the defined _space
-  ompl::base::PlannerPtr plan(new ompl::geometric::InformedRRTstar(_si));
+  ompl::base::PlannerPtr plan(new ompl::geometric::RRTstar(_si));
 
   // set the problem we are trying to solve for the Planner
   plan->setProblemDefinition(_pdef);
@@ -269,10 +274,13 @@ void Planner::plan()
   _pdef->print(std::cout);
 
   // Get the distance to the desired goal for the top solution
-  _pdef->getSolutionDifference();
+  // _pdef->getSolutionDifference();
 
-  // attempt to solve the problem within one second of planning time
-  ompl::base::PlannerStatus solved = plan->solve(2);
+  // Find a nearby state in a distance of 1 meter if the initial state is not valid
+  _pdef->fixInvalidInputStates(1, 1, 10);
+
+  // attempt to solve the problem within three seconds of planning time
+  ompl::base::PlannerStatus solved = plan->solve(3);
 
   if (solved)
   {
@@ -284,6 +292,7 @@ void Planner::plan()
     pth->printAsMatrix(std::cout);
     // print the path to screen
     // path->print(std::cout);
+
     trajectory_msgs::MultiDOFJointTrajectory msg;
     trajectory_msgs::MultiDOFJointTrajectoryPoint point_msg;
 
@@ -329,7 +338,7 @@ void Planner::plan()
     ROS_WARN("Path smoothness : %f\n", _path_smooth->smoothness());
     // Using 5, as is the default value of the function
     // If the path is not smooth, the value of smoothness() will be closer to 1
-    int bspline_steps = ceil(5 * _path_smooth->smoothness());
+    int bspline_steps = ceil(3 * _path_smooth->smoothness());
 
     pathBSpline->smoothBSpline(*_path_smooth, bspline_steps);
     ROS_INFO("Smoothed Path\n");
@@ -412,7 +421,7 @@ void Planner::plan()
       marker.color.b = idx * 0.20;
       _vis_pub.publish(marker);
       ros::Duration(0.1).sleep();
-      ROS_INFO("Published marker %zu\n", idx);
+      ROS_DEBUG("Published marker %zu\n", idx);
     }
 
     // Clear memory
