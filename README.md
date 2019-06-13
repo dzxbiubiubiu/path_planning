@@ -1,8 +1,51 @@
-# path_planning
-Quadcopter path planning using RRT* and minimum jerk trajectory generation
+# Path Planning
 
-![path_planning](https://user-images.githubusercontent.com/4923897/27253141-7f34cf18-538c-11e7-9fab-bad4d44f7c6c.gif)
+## Overview
 
-Red represents minimum jerk trajectory while green represents a bspline trajectory through the visibility graph generated from RRT*
+This package contains an implementation of path planning within an OctoMap. It uses the OMPL Library to create safe obstacle-free and smooth trajectories that reach a specific goal.
 
-For futher information take a look at this [issue](https://github.com/ayushgaud/path_planning/issues/1)
+## Usage
+
+Run the main node with
+
+	roslaunch path_planning path_planning.launch
+
+
+## Launch files
+
+* **path_planning.launch:**  Run the main node
+
+## Nodes
+
+### path_planning
+
+Create obstacle-free paths in an OctoMap that are suitable for the drone.
+
+#### Subscribed Topics
+
+* **`/octomap_binary`** [octomap_msgs/Octomap]
+
+	The map that is used for path planning.
+
+* **`/amcl_pose`** [geometry_msgs/PoseStamped]
+
+	The real-time position estimation of the drone.
+
+* **`/next_goal`** [geometry_msgs/TransformStamped]
+
+	The next goal that the drone must reach and a path towards it must be created.
+
+#### Published Topics
+
+* **`/waypoints`** [trajectory_msgs/MultiDOFJointTrajectory]
+
+	The set of points that the drone must navigate through in order to achieve a smooth and obstacle-free navigation.
+
+* **`/waypoints_smooth`** [trajectory_msgs/MultiDOFJointTrajectory]
+
+	A smoother version of the trajectory, after smoothing it using B-spline functions.
+
+
+## Bugs & Feature Requests
+
+Please report bugs and request features using the [Issue Tracker](https://github.com/kosmastsk/thesis/issues).
