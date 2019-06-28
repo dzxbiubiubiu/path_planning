@@ -10,7 +10,7 @@
 
   <url type="issuetracker">https://github.com/kosmastsk/thesis/issues</url>
 
-  <author email="">Ayush Gaud</author>
+  <author>Ayush Gaud</author>
   <author email="kosmastsk@gmail.com">Kosmas Tsiakas</author>
 
   <buildtool_depend>catkin</buildtool_depend>
